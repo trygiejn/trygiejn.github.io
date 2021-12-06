@@ -1,0 +1,1257 @@
+---
+title: "Adoptable Dogs project"
+author: "John Trygier, Yuqiu Wang, Carrie Vennefron, Dhruv Cairae, Bob Koenig"
+date: "11/13/2021"
+output: 
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    theme: readable
+    toc: yes
+    code_folding: show
+editor_options: 
+  chunk_output_type: console/Users/teresa/Desktop/R data/Data wrangling project/final sub
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction{.tabset .tabset-fade .tabset-pills}
+
+##  Problem Statement
+
+  Approximately [3.1 million dogs](https://www.aspca.org/helping-people-pets/shelter-intake-and-surrender/pet-statistics) are sheltered annually in the United States. At these shelters, about [1.2 million](https://www.thedodo.com/dog-shelter-guide-adoptions-1532460278.html) dogs are put down every year. Even the dogs which are not put down are often scared and confused, which makes them less adoptable due to their behavior during visits. However, there may be a way to determine the adoptability of canines, which shelters could potentially use to optimize their adoption process. This would result in more shelter dogs being homed and not being re-sheltered. The first step is to understand what makes specific dogs “adoptable” or not.
+  
+  The [data](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-12-17) used for investigating the adaptability of shelter dogs is that of [The Pudding’s](https://github.com/the-pudding/data/blob/master/dog-shelters/README.md) [Amber Thomas](https://twitter.com/proquesasker) and [Sacha Maxim](https://twitter.com/sacha_maxim). The method that the team plans to use is by cleaning, exploring, and analyzing said data such that correlations and patterns can be illustrated which may explain the trends by which Americans adopt dogs. 
+  
+  Our current proposed approach/analytic technique which we believe will help to address this problem is **Frequent Subsequence Mining or Subset Mining**. By filtering for certain traits of dogs, we can then observe if these traits possibly contribute to their eventual adoption or not. For example, do Americans prefer to adopt dogs which can be bred (like those who have not been spayed or neutered), or would a dog be more likely to be adopted if there was no chance for unwanted pregnancy? Does location affect this? Perhaps there are more dog breeders in southern states as opposed to northern states. Which breeds of dogs are more likely to be adopted, and are adopters willing to import or export their pets to get the specific breed that they want? By wrangling this data and exploring these factors, perhaps a clearer understanding of a dog’s adaptability can be gleaned. 
+  
+  *This analysis will help shelters* enhance their adoption process to target certain American demographics with different desires for the dogs they choose to adopt. This way, adoption can be facilitated when said shelters use this analysis to potentially make their dogs more adoptable by declawing, grooming, training and/or sterilizing sheltered dogs; or importing/exporting sheltered dogs to improve their chances at adoption. Enhanced adoptability of dogs will then theoretically lead to increased rates of adoption, which will decrease overall suffering of sheltered dogs. 
+  
+## Packages Required
+  The package which was used in this analysis and is therefore required to replicate it is [tidyverse](https://www.tidyverse.org/). We chose to use this package because it is comprised of several other packages, including: *ggplot2* (for creating graphics), *dplyr* (for data manipulation), *tidyr* (to help clean the data), *readr* (to read rectangular data), *tibble* (to modify data frames), etc. *Our team used the tidyverse package because* we wanted to utilize the following commands which are available in the tidyverse package: readr::read_csv, tibble(), mutate(), etc.
+  
+  We also used the *hwardcloud* and *wordcloud2* packages to generate word clouds. Additionally, package *tm* was used for text mining, package *SnowballC* was used for text stemming, and package *RColorBrewer* was used for access to different color palettes. We use the *devtools* github package, including the libraries *d3scatter* and *crosstalk* to generate interactive plots.
+
+
+## load package and write functions to avoid iteration
+
+``` {r install packages, message=FALSE, warning=FALSE, results='hide', echo= FALSE}
+#  install.packages("tm", repos = "http://cran.us.r-project.org")  # for text mining
+#  install.packages("SnowballC", repos = "http://cran.us.r-project.org")   # for text stemming
+#  install.packages("wordcloud", repos = "http://cran.us.r-project.org")   # word-cloud generator
+#  install.packages("RColorBrewer", repos = "http://cran.us.r-project.org")   # color palettes
+#  install.packages("d3scatter", repos = "http://cran.us.r-project.org")
+#  install.packages("devtools", repos = "http://cran.us.r-project.org")
+#  devtools::install_github("rstudio/crosstalk", repos = "http://cran.us.r-project.org")
+#  devtools::install_github("jcheng5/d3scatter", repos = "http://cran.us.r-project.org")
+#  install.packages("lubridate", repos = "http://cran.us.r-project.org")
+#  install.packages("glue", repos = "http://cran.us.r-project.org")
+# install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+# install.packages("lattice", repos = "http://cran.us.r-project.org")
+# install.packages("leaflet", repos = "http://cran.us.r-project.org")
+# install.packages("formattable", repos = "http://cran.us.r-project.org")
+#  install.packages("geojsonio", repos = "http://cran.us.r-project.org")
+#  install.packages('rgeos', type='source', repos = "http://cran.us.r-project.org")
+#  install.packages('rgdal', type='source', repos = "http://cran.us.r-project.org")
+#  install.packages('RColorBrewer', repos = "http://cran.us.r-project.org")
+#  install.packages('viridis', repos = "http://cran.us.r-project.org")  # color Palette
+#  install.packages("zipcodeR", repos = "http://cran.us.r-project.org") # identify zip code latitudes and longitudes
+# install.packages("ggmap", repos = "http://cran.us.r-project.org") # map-based plotting
+``` 
+
+```{r load r packages, echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+# Load Libraries
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(tibble)
+library(broom)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(lattice)
+library(formattable)
+library(zipcodeR)
+library(ggmap)
+library(geojsonio)
+library(RColorBrewer)
+library(rgdal)
+library(rgeos)
+library(viridis) 
+
+library(usmap)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(leaflet)
+
+library(crosstalk)
+library(d3scatter)
+library(lubridate)
+#library(glue)
+```
+
+**Create 2 variables** named `state_fulname`and `state_abrv` representing full name and abbreviation of 51 states to avoid duplication.
+```{r state variable, message=FALSE, warning=FALSE}
+state_fulname = c('Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia','Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts','Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey','New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island','South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia','Wisconsin', 'Wyoming', 'Washington DC')
+
+state_abrv= c('AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME','MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA','RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC')
+ 
+```
+
+**Create a Function** named **`freq_count`** to avoid iteration. The function has argument of `df`(the data frame), `group_var`(the variable we want to group_by) and `n`(top n biggest frequency count numbers).  
+```{r functions to avoid duplicate, message=FALSE, warning=FALSE}
+
+freq_count <- function(df, group_var, n) {
+  require(dplyr)
+  group_var <- enquo(group_var) # need to quote
+  #summary_var <- enquo(summary_var)
+  df %>%
+    group_by(!!group_var) %>% # !! unquotes
+    summarise(freq_sum = n())%>%
+    arrange(desc(freq_sum))%>%
+    top_n(n=n)
+}
+
+```
+
+# Data Cleaning {.tabset .tabset-fade .tabset-pills}
+
+## Data Source and Explore{#datasourceheader}
+
+Data for this project comes from Adoptable Dogs on the R for Data Science Github repository
+[here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-12-17).
+
+This data was originally used in a project by Amber Thomas and designed by Sacha Maxim. This data was included with their article, [Finding Forever Homes](https://pudding.cool/2019/10/shelters/) and uses this adoptable dogs data from 09-20-2019 from Petfinder.com.
+
+Included are three data sets. Two of which can be joined and at third that is a summary data set.
+
+**Note:** The [original data](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-17/dog_descriptions.csv) `dog_descriptions.csv` has data entry mistakes. Thus, we corrected on the data entries and **load the [new data](https://raw.githubusercontent.com/njuteresa2019/MS-BA-data-wrangling/main/dog_descriptions.csv) from our personal github repository.**
+
+**Load Data and library**
+
+```{r load dataset, message=FALSE, warning=FALSE}
+dog_moves <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-17/dog_moves.csv')
+dog_travel <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-17/dog_travel.csv')
+
+dogtraveltry<- readr::read_csv("https://raw.githubusercontent.com/the-pudding/data/master/dog-shelters/dogTravel.csv")
+
+#original data:
+#dog_descriptions <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-17/dog_descriptions.csv')
+
+#new dog_descriptions
+dog_descriptions<-readr::read_csv('https://raw.githubusercontent.com/njuteresa2019/MS-BA-data-wrangling/main/dog_descriptions.csv')
+
+```
+
+**Remove Missing Values: `Move` dataset**
+
+```{r remove na in moves dataset, message=FALSE, warning=FALSE}
+summary(dog_moves)
+x <- dog_moves[is.na(dog_moves$total),]
+print(tibble(x), n=10)
+```
+
+**Treatment of missing values: `Travel` and `Description` dataset ** 
+
+As per description, the number of adoptable dogs available in the US that originated in this location but were available for adoption in another location  and vice versa for imported dogs. `Total` is simply total dogs available. For `imported` and `exported` we can replace missing values with 0, although as we don't want to lose entire rows and possibly it might actually be 0 as well. Apart from Indianapolis, the rest of the values are foreign countries for `Total` so it does not matter much as we are not focused on total dogs available for adoption outside the US. It will simply be transformed into 0. Logically and for our analysis, this would not have an impact.
+
+```{r treatment of na in move dataset, message=FALSE, warning=FALSE}
+dog_moves$total[is.na(dog_moves$total)] <- 0
+dog_moves$imported[is.na(dog_moves$imported)] <- 0
+dog_moves$exported[is.na(dog_moves$exported)] <- 0
+
+```
+
+We have missing values for `remove` and `still_there`. We might not have this data collected but it does have to exist Animal removed from location is for remove. `still_there` is whether the animal is still located in their original location and will be transported to their final destination after adoption. Ideally, interaction with source of data would clarify this. For `remove` we can assume `NA` is *false* which will imply animal is still present at location. Similarly for `still_there`. These movements are for dogs in transit for adoption, and anything else we can assume the large chunk of dogs are *not* moving, hence `NA` turned into `FALSE`.
+
+```{r treatment of na in travel dataset}
+dog_travel$remove[is.na(dog_travel$remove)] <- FALSE
+dog_travel$still_there[is.na(dog_travel$still_there)] <- FALSE
+summary(dog_travel)
+```
+
+`Declawed`, `color_tertiary`, `photo`, and `tags` are **removed** as nearly all values here are missing. Species is dog for every row so it adds no additional value. 
+
+```{r}
+dog_descriptions <- subset(dog_descriptions,select = -c(declawed,species,color_tertiary ,photo ,tags))
+
+```
+
+**Checking for counts of NA's by attribute**
+
+Remaining missing values are all in character variables, the `NA` values can be replaced by UNKNOWN character string for models which don't tolerate missing values. 
+
+* **NA counts in dog_description dataset**
+
+```{r}
+colSums(is.na(dog_descriptions))
+```
+
+* **NA counts in dog_travel dataset**
+
+```{r}
+colSums(is.na(dog_travel))
+```
+
+* **NA counts in dog_moves dataset**
+
+```{r}
+colSums(is.na(dog_moves))
+```
+
+**Evaluation of the data types and values**
+
+In this section we evaluate the individual variables. Looking at the datatype and values in the attribute. 
+
+* Evaluation for:
+
+1. Is the datatype appropriate?
+
+2. Are there data that will disrupt the analysis, including outliers?
+
+* The Process:
+
+1. Run summary on the attribute.
+
+2. Evaluate that data. Running additional reports and plots to inspect the data including but not limited to tidy queries, visually inspecting output and plots.
+
+3. Run any cleanup or tidying that was appropriate.
+
+4. Provide visual representation, table or other output to communicate the contents.
+
+Included below all the attributes and the summary views that were chosen to represent the data. Where cleanup or other manipulation was needed, this code is included and explained in more detail.
+
+[Back to top of this section](#datasourceheader)
+
+
+## Dog Moves Dataset{#dogmoveheader}
+
+This dataset was derived from `Dog Descriptions.csv` and `Dog Travel.csv` file to find the total numbers of imports and exports for each location. This data represents a single day of data. It was all collected on **September 20, 2019**. The script to process the file can be found [here](https://github.com/the-pudding/data/blob/master/dog-shelters/movesByLocation.R).
+
+```{r move dataset dim, message=FALSE, warning=FALSE}
+dim(dog_moves)
+
+head(dog_moves)
+
+summary(dog_moves)
+```
+
+**`location`** - character - The full name of the US state or country.
+```{r dog moved data location, message=FALSE, warning=FALSE}
+freq_count(dog_moves,location,5)
+```
+There are 90 rows in this dataset. Each row represents a specific US state or country.
+
+**`exported`** - double - The number of adoptable dogs available in the US that originated in this location but were available for adoption in another location
+
+**`imported`** - double - The number of adoptable dogs available in this state that originated in a different location
+
+**`total`** - double - The total number of adoptable dogs available in a given state.
+
+**`inUS`** - logical - Whether or not a location is in the US or not. Here, US territories will return FALSE
+```{r dog moves inUS, message=FALSE, warning=FALSE}
+freq_count(dog_moves,inUS,5)
+```
+There are 51 observations that are in the U.S. and 39 from other countries. We can create a new variable `country` and fill with "U.S." and other country names. 
+ 
+```{r create new varible in dog move dataset}
+dog_moves<- dog_moves%>%
+  mutate(country= ifelse(inUS=="TRUE","US",location))
+```
+
+
+[Back to top of this section](#dogmoveheader)
+
+## Dog Travel Dataset{#dogtravelheader}
+
+This dataset was derived from `Dog Descriptions.csv`. This file only includes information on dogs whose `description` indicates that **they did not originate in the state where they were made available for adoption.** This file aims to show where those dogs are available and where they came from. This data represents a single day of data. It was all collected on **September 20, 2019**. The script to process the file can be found [here](https://github.com/the-pudding/data/blob/master/dog-shelters/dogTravel.R).
+
+```{r explore of dog travel dataset}
+dim(dog_travel)
+
+head(dog_travel)
+
+summary(dog_travel)
+```
+
+**`id`** - double - The unique PetFinder identification number for each animal
+
+**`contact_city`** - character - The rescue/shelter's listed city. Cleaning: change zipcode=17325 to it's city name Gettysburg.
+```{r}
+#table(dog_travel$contact_city)
+dog_travel%>%
+  filter(nchar(contact_city)<3)
+
+#cleaning
+dog_travel<- dog_travel%>%
+  mutate(contact_city=ifelse(contact_state=="17325","Gettysburg",contact_city))
+
+```
+
+**`contact_state`** - character - The rescue/shelter's listed State. Cleaning: change the zipcode to the state code name.
+```{r}
+table(dog_travel$contact_state)
+
+#cleaning
+dog_travel$contact_state[dog_travel$contact_state=="17325"]<-'PA'
+```
+
+**`description`** - character - The full description of each animal as entered by the rescue/shelter
+```{r description variable, message=FALSE, warning=FALSE}
+head(dog_travel$description, 1)
+```
+
+**`found`** - character - Where the animal was found.
+Note: this is a mixed bag of values States/countries/cities
+```{r found table, message=FALSE, warning=FALSE, results='hide'}
+table(dog_travel$found)
+```
+
+The entries looks abnormal:
+```{r check for data cleaning,message=FALSE, warning=FALSE}
+dog_travel%>%
+  filter(found%in%c("Beijing","Ark","Ark.","Buddy","Chihuahua"))
+
+horrible<- dog_travel%>%filter(found=="HORRIBLE")
+```
+After looking into the data, we do not need to clean them. They are names of places instead of wrong data entries. [Buddy City](https://www.buddycity.cn) is a Day Care, Boarding, Grooming and Training facility for dogs located in the city center of Shanghai. Chihuahua is the largest state in Mexico.
+
+
+**`manual`** - character - The data was manually reviewed and cleaned to remove any original locations that contained only a vague location (e.g., the south, the Carolinas) in favor of those explicitly described.
+```{r found and manual combine, message=FALSE, warning=FALSE}
+dog_travel<- dog_travel%>%
+  mutate(found_new=ifelse(is.na(manual),found,manual))
+```
+
+Therefore, we create a new variable`found_new` to combine `found` and `manual`.
+
+**`remove`** - logical - Animal removed from location
+
+**`still_there`** - logical - TRUE/FALSE - Whether the animal is still located in their origin location and will be transported to their final destination after adoption.
+```{r still there variable, message=FALSE, warning=FALSE}
+freq_count(dog_travel,still_there,5)
+```
+Only 319 dogs are still there (`TRUE`).
+
+[Back to top of this section](#dogtravelheader)
+
+## dog_descriptions dataset{#descriptionheader}
+
+There are 58,180 rows in this dataset. Each row represents an individual adoptable dog in the US on **September 20, 2019**. Each dog has a unique ID number. Unless otherwise noted, all of the data is exactly is reported by the shelter or rescue that posted an individual animal for adoption on PetFinder.
+
+**Dataset dimensions**
+
+```{r explore od description dataset, message=FALSE, warning=FALSE}
+dim(dog_descriptions)
+
+head(dog_descriptions)
+
+summary(dog_descriptions)
+```
+**`id`** - double - The unique PetFinder identification number for each animal.
+
+```{r}
+quantile(dog_descriptions$id)
+```
+**`org_id`** - character - The unique identification number for each shelter or rescue.
+```{r}
+freq_count(dog_descriptions,org_id, 5)
+```
+These are top 5 shelter/ rescue organizations and GA423 ranked the first with 473 rescue records. 
+
+**`url`** - character - The URL for each animal's listing.
+```{r}
+head(dog_descriptions$url, 5)
+```
+**`species`** - character - Species of animal. 
+**REMOVED** in prior step (all rows are Dogs)
+
+**`breed_primary`** - character - The primary (assumed) breed assigned by the shelter or rescue.
+```{r}
+head(table(dog_descriptions$breed_primary))
+
+x<- freq_count(dog_descriptions,breed_primary,200)
+```
+Most frequent breed within the data is Pit Bull Terrier.
+
+**`breed_secondary`** - character - The secondary (assumed) breed assigned by the shelter or rescue.
+```{r}
+head(table(dog_descriptions$breed_secondary))
+```
+**`breed_mixed`** - logical - Whether or not an animal is presumed to be mixed breed.
+```{r}
+summary(dog_descriptions$breed_mixed)
+```
+**`breed_unknown`** - logical - Whether or not the animal's breed is completely unknown.
+**REMOVED** - These were all FALSE so attribute is removed
+```{r}
+table(dog_descriptions$breed_unknown)
+
+dog_descriptions <- 
+  dog_descriptions %>% 
+  mutate(breed_unknown = NULL)
+```
+**`color_primary`** - character - The most prevalent color of an animal.
+```{r , warning=FALSE}
+table(dog_descriptions$color_primary)
+
+freq_count(dog_descriptions,color_primary,5)
+```
+Nearly half of the color information are missing. 
+
+**`color_secondary`** - character - The second most prevalent color of an animal.
+```{r}
+table(dog_descriptions$color_secondary)
+```
+**`color_tertiary`** - character - The third most prevalent color of an animal.
+**REMOVED** in a prior step
+
+**`age`** - character - The assumed age class of an animal (Baby, Young, Adult, or Senior).
+```{r}
+table(dog_descriptions$age)
+```
+**`sex`** - character - The sex of an animal (Female, Male, or Unknown).
+```{r}
+table(dog_descriptions$sex)
+```
+**`size`** - character - The general size class of an animal (Small, Medium, Large, Extra Large).
+```{r}
+table(dog_descriptions$size)
+```
+**`coat`** - character - Coat Length for each animal (Curly, Hairless, Long, Medium, Short, Wire).
+```{r}
+table(dog_descriptions$coat)
+```
+**`fixed`** - logical - Whether or not an animal has been spayed/neutered.
+```{r}
+table(dog_descriptions$fixed)
+```
+**`house_trained`** - logical - Whether or not an animal is trained to not go to the bathroom in the house.
+```{r}
+table(dog_descriptions$house_trained)
+```
+**`declawed`** - logical - Whether or not the animal has had its dewclaws removed.
+**REMOVED** in a prior step all were FALSE
+
+**`special_needs`** - logical - Whether or not the animal is considered to have special needs (this can be a long-term medical condition or particular temperament that requires extra care).
+```{r}
+table(dog_descriptions$special_needs)
+```
+**`shots_current`** - logical - Whether or not the animal is up to date on all of their vaccines and other shots.
+```{r}
+table(dog_descriptions$shots_current)
+```
+**`env_children`** - logical - Whether or not the animal is recommended for a home with children.
+```{r}
+table(dog_descriptions$env_children)
+```
+**`env_dogs`** - logical - Whether or not the animal is recommended for a home with other dogs.
+```{r}
+table(dog_descriptions$env_dogs)
+```
+**`env_cats`** - logical - Whether or not the animal is recommended for a home with cats.
+```{r}
+table(dog_descriptions$env_cats)
+```
+
+**`name`** - character - The animal’s name (as given by the shelter/rescue).
+This data was cleaned up a bit. There were Identification number and other extra information that for the analysis that we are looking to perform will be distracting and confusing to the end users. It might be necessary to do additional cleanup as we proceed.  We are starting by getting the numbers that would be meaningless to the end user cleaned up.
+
+The process is using regular expressions to update the values with just an id number to "Unknown".
+Note: includes some notes Like  "sponsored" "courtesy post" Id numbers of some kind
+
+```{r}
+head(dog_descriptions$name, 20)
+dim(dog_descriptions)
+
+dog_descriptions <- dog_descriptions %>% 
+  mutate(name = str_to_title(name))
+
+dog_descriptions <- dog_descriptions %>% 
+  mutate(name = ifelse( str_detect(name, "^[0-9]*$"), "Unknown", name) ) %>% 
+  mutate(name = ifelse( !str_detect(name, "[A-Z][A-z]*"), "Unknown", name) ) %>% 
+  mutate(name = ifelse( str_detect(name, "^A[0-9]"), "Unknown", name) )
+```
+**`tags`** - character - Any tags given to the dog by the shelter rescue (pipe | separated).
+**REMOVED** in a prior step
+
+**`photo`** - character - The URL to the animal’s primary photo.
+**REMOVED** in a prior step
+
+**`status`** - character - Whether the animal is adoptable or not.
+```{r}
+summary(dog_descriptions$status)
+```
+
+**`posted`** - character - The date that this animal was first listed on PetFinder .
+
+This single data-time attribute has been separated into separate attributes for each of the periods, posted_year, posted_month, ...
+```{r}
+
+dog_descriptions <-
+  dog_descriptions %>% 
+  separate(posted, c('posted_year', 'posted_month', 'posted_day', 'posted_hour', 'posted_min', 'posted_sec'), sep = "([- :])")
+
+
+dog_descriptions %>% 
+  select('posted_year', 'posted_month', 'posted_day', 'posted_hour', 'posted_min', 'posted_sec') %>% 
+  head()
+
+```
+
+**`contact_city`** - character - The rescue/shelter’s listed city.
+
+Clean up: This field had different issues with cases. This effecting the way that the cities were grouped together.
+
+The process used was a mapping tribble and then joining this to the original data and updating. Another way would have been to change the attribute to Title case throughout.  This would have taken less code but would not ensure that all the modifications would have been approprtate as the menthod allows.  For example Washington DC would be converted to Washington Dc if title case would have been used.
+
+```{r cleaning of city names}
+map <- tribble(
+  ~contact_city, ~adj_city,
+  "abingdon", "Abingdon",
+  "lake charles", "Lake Charles",
+  "JERSEY CITY", "Jersey City",
+  "aitkin", "Aitkin",
+  "cary", "Cary",
+  "carson", "Carson",
+  "BROOKLYN", "Brooklyn",
+  "denver", "Denver",
+  "grandville", "Grandville",
+  "GREER","Greer",
+  "BERLIN", "Berlin",
+  "YERINGTON", "Yerington",
+  "SACRAMENTO","Sacramento",
+  "LINDSAY","Lindsay",
+  "MONUMENT","Monument",
+  "WHEAT RIDGE","Wheat Ridge",
+  "NASSAU","Nassau",				
+  "NEWARK","Newark",
+  "MARION","Marion",
+  "TROUTMAN","Troutman",
+  "JIM THORPE","Jim Thorpe",
+  "POCONO SUMMIT","Pocono Summit",
+  "MARYSVILLE","Marysville",
+  "reno", "Reno",
+  "mount vernon","Mount Vernon",
+  "modesto","Modesto",
+  "ridgefield","Ridgefield",
+  "taunton","Taunton",
+  "garden city park","Garden City Park",
+  "churchton","Churchton",
+  "huntingtown","Huntingtown",
+  "fayetteville","Fayetteville",
+  "canton","Canton",
+  "seattle","Seattle"
+)
+
+dog_descriptions <- 
+  dog_descriptions %>% 
+  left_join(map) %>% 
+  mutate(contact_city = if_else(is.na(adj_city), contact_city, adj_city))
+
+
+dog_descriptions %>% distinct(contact_city) %>% head()
+```
+
+
+Taking a close look of the [original data](https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-12-17/dog_descriptions.csv), it's data entry problem. Value or NA was not entered for wrong columns, thus columns`status`,`contact_city`,`contact_state`,`contact_contry`,`contact_zip`, `stateQ`,`accessed` were shifted (mismatching column names). we cleaned them in the original data. For example, In the original data `id`="31426754": There is one record have data entry that had put state in city cell (the data was shifted). Therefore, we used and loaded [new data](https://raw.githubusercontent.com/njuteresa2019/MS-BA-data-wrangling/main/dog_descriptions.csv) instead.
+
+```{r contact city checking, message=FALSE,warning=FALSE, results='hide'}
+table(dog_descriptions$contact_city)
+
+#check if the data is corrected
+#a<- dog_descriptions%>%
+#  filter(id=="31426754")
+```
+
+```{r contact city cleaning, echo=FALSE, message=FALSE,warning=FALSE}
+#dog_descriptions<- dog_descriptions%>% 
+#  mutate(contact_city= ifelse(id=="31426754", "Lake Charles", contact_city),
+#         contact_state=ifelse(id=="31426754","LA",contact_state),
+#         contact_zip=ifelse(id=="31426754","70601",contact_zip),
+#         contact_country=ifelse(id=="31426754","US",contact_country))
+
+```
+
+**contact_state** - character - The rescue/shelter’s listed state.
+Noted that in the original data there are numeric values in the contact_state attribute. There's 32 rows of entries that is zipcode instead of state abbreviation code. Check new data if cleaned:
+```{r contact state in dog description dataset,echo=FALSE,message=FALSE,warning=FALSE}
+table(dog_descriptions$contact_state)
+
+#check the number of wrong data 
+#dog_descriptions%>%
+#  select(contact_state)%>%
+#  filter(nchar(contact_state)>3)%>%
+#  summarise(n())
+
+#zipcodes that appeared in column `contact_state`
+#zipcode_select=c("12220","12477","17325","19053","19063","20136","20905","23112","24588","37189","38506","45061","45249","46158","47131","47454","61944","85249","87108","89146","98106") 
+#ZC = data.frame(zipcode_select)
+
+#subset and looking into the wrong entries
+#subset_df<- dog_descriptions%>%
+#  filter(contact_state%in%zipcode_select)
+
+#datarow according id number
+#id_select=c("41330726","38169117"," 45833989", "45515547", "45294115", "45229004", "45227052", "45569380","44694387", "36978896", "33218331", "42092005", "39594038", "45895274", "45964719", "44538917","41430442", "45907639", "45362806", "32590894", "46037827", "44044071", "27521132", "38473806", "34101432", "45958435", "45927580", "45916348", "45733027", "45413997", "45406516", "45264615")
+
+```
+
+**contact_zip** - character - The rescue/shelter’s listed zip code.
+```{r}
+summary(dog_descriptions$contact_zip)
+```
+
+**contact_country** - character - The rescue/shelter’s listed country.
+Noted that there are a few countries that would seem to have state codes entered.  These seem to be related to the similar issue seen in the state attribute above.
+
+```{r contact country table,message=FALSE,warning=FALSE}
+table(dog_descriptions$contact_country)
+```
+
+**stateQ** - character - The state abbreviation queried in the API to return this result .
+```{r stateQ table, message=FALSE,warning=FALSE}
+table(dog_descriptions$stateQ)
+
+```
+
+**accessed** - double - The date that this data was acquired from the PetFinder API.
+
+This date was separated into is date components.
+```{r}
+dog_descriptions <-
+  dog_descriptions %>% separate(accessed, c('accessed_year', 'accessed_month', 'accessed_day' ), sep = '-') 
+  
+  
+dog_descriptions %>% 
+  select(accessed_year, accessed_month, accessed_day) %>% 
+  head()
+
+```
+
+**type** - character - The type of animal.
+```{r}
+table(dog_descriptions$type)
+```
+
+**description** - character - The full description of an animal, as entered by the rescue or shelter. This is the only field returned by the V1 API.
+```{r}
+head(dog_descriptions$description,1)
+```
+
+We intend to use information of `adoption fee` and `transport fee` and `age` in the `$description` column,only a small percentage of age and fees information can be extracted from the description columns.
+```{r pct of extracts}
+dog_descriptions %>% 
+  select(description) %>% 
+  mutate(age_extract = str_detect(description, "years old"),
+         fee_extract=str_detect(description,"fee$"))%>%
+  summarize(pct_age = mean(age_extract, na.rm = TRUE),
+            pct_fee = mean(fee_extract, na.rm = TRUE))
+```
+
+
+[Back to top of this section](#descriptionheader) 
+
+## Combined data
+
+### Create Travel Detail data set{#datacombineheader}
+A new data set travel_detail is created containing information about specific dogs travels where it is available. This new table is obtained by linking the dog_descriptions data set with the dog_travel data set using the provided id variable. The new data set provides a easy way to retrieve additional information about individual dogs travels where this information is provided.
+
+```{r Combined Data - dog_descriptions/travel}
+
+# join the dog_descriptions and the dog_travel using the id that was provided.
+travel_detail <- dog_descriptions %>% 
+  left_join(dog_travel, by="id")
+
+```
+
+### Create State Summary <--> Detail data set
+To provide the ability to easily drill down to the detail about a given state based on the summary data the dog_moves is combined with the dog_description based on the state.We create a `state_codes` data for join purpose.
+```{r Combined Data - dog_moves/descriptions}
+## join the summary table dog_moves with the detail (descriptions)
+
+# Create a look up table to translate from the state name to the state code.
+state_codes <- tibble(state = state_fulname,
+                      abbrev = state_abrv)
+
+# join the dog_moves to the dog_descriptions by state/state code through state_codes, the look up table
+summary_detail <- dog_moves %>% 
+  inner_join(state_codes, by = c("location" = "state")) %>% 
+  inner_join(dog_descriptions, by = c("abbrev" = 'contact_state'))
+```
+### Check State Summary <--> Detail data set
+Check to make sure that the summary total in the dog_moves data set matches the total number of rows from the details data set (dog_description). This "dim()" call should return 0 x number of columns.
+```{r check summary_detail}
+# make sure that the totals still add up
+summary_detail %>% 
+  group_by(location) %>% 
+  mutate(tot = max(total), count = n()) %>% 
+  filter(tot != count) %>% 
+  dim()
+```
+
+[Back to top of this section](#datacombineheader)
+
+# Exploratary Data Analysis{.tabset .tabset-fade .tabset-pills}
+
+## EDA by visualization{#EDAvisheader}
+
+We will start EDA by exploring and visualizing the variables within each data sets. 
+
+### Dog Moves Dataset EDA
+
+We build interactive plots for the country a dog is in to provide information to the user.
+
+**Dog Location**
+
+```{r interactive-plots, message=FALSE,warning=FALSE}
+shared_dogmoves <- SharedData$new(dog_moves)
+bscols(widths = c(3,NA,NA),
+       list(
+         filter_checkbox("ctr", "In the US?", shared_dogmoves, ~inUS, inline = TRUE),
+         filter_select("st", "Location Name", shared_dogmoves, ~location)
+       ),
+       d3scatter(shared_dogmoves, ~total, ~exported, ~factor(inUS), width="100%", height=250)
+)
+```
+
+Above we can see a plot comparing the total number of dogs plotted against the total number of exported dogs in our dataset with an interactive filter to view only dogs in the US vs. those outside of the US, as well as a dropdown location selector. We could incorporate a more advanced version of this inside of our shiny app to give insight as to the total number of dogs in a given location, as well as whether they are generally exported or imported.
+
+**barplot**
+```{r barplot, message=FALSE,warning=FALSE}
+par(mfrow=c(2,2))
+
+#inUS
+barplot(table(dog_moves$inUS), ylab = "Count of Dogs", main = "$inUS:Dogs in vs. not in the US")
+
+#Exported dogs
+barplot(dog_moves$total ~ dog_moves$location, xlab = "Location", ylab = "# of Exported Dogs", main = "# of Exported Dogs by Location", las = 2)
+
+#imported dogs
+barplot(dog_moves$imported ~ dog_moves$location, xlab = "Location", ylab = "# of Dogs", main = "# of Imported Dogs by Location", las = 2)
+
+#total dogs
+barplot(dog_moves$total ~ dog_moves$location, xlab = "Location", ylab = "# of Dogs", main = "Total # of Dogs by Location", las = 2)
+
+```
+
+top 5 exported countries:
+```{r top 5 country, message=FALSE,warning=FALSE}
+sum<- dog_moves%>%
+  group_by(country)%>%
+  summarise(sum_export= sum(exported),
+            sum_import= sum(imported))%>%
+  filter(country!="US")%>%
+  arrange(desc(sum_export))
+
+head(sum)
+```
+
+### Dog Travel Dataset EDA 
+
+**contact state** 
+
+We intend to gain geographical visualization of travel summarized by `contact state`. We could also do similar with `found`.
+```{r contact state explore, message=FALSE, warning=FALSE}
+freq_count(dog_travel,contact_state,5)
+```
+State Virginia state has the largest number of rescue/shelter. 
+
+**found_new**
+
+```{r found variable, message=FALSE, warning=FALSE}
+dog_travel%>%
+  filter(!duplicated(id))%>%
+  freq_count(found_new,5)
+```
+State Texas has the biggest output: 633 dogs were found/rescued in Texas.
+
+
+
+```{r map by contact state, echo=TRUE, message=FALSE, warning=FALSE}
+#contact_state
+travel <- dog_travel %>%
+  filter(contact_state%in%state_abrv)%>%
+  freq_count(contact_state,51)%>%
+  mutate(state=contact_state)%>%
+  data.frame()
+
+travel$freq_sum <- as.numeric(travel$freq_sum)
+
+# found: join the dog_travel with state_codes
+found <- dog_travel %>%
+  left_join(state_codes, by = c("found_new" = "state"))%>%
+  mutate(state_new=abbrev)%>%
+  freq_count(state_new,51)%>%
+  na.omit()%>%
+  mutate(state=state_new)%>%
+  data.frame()
+
+found$freq_sum <- as.numeric(found$freq_sum)
+
+#map- contact state
+
+plot_usmap(data = travel, 
+           values = 'freq_sum', 
+          include=travel$state, 
+          color = "red",
+          labels = TRUE) + 
+ scale_fill_continuous(
+   low = "white", high = "red", name = "# of dogs",label = scales::comma) + 
+  labs(title = "US States", subtitle = "$contact_state: Number of dogs group by state") 
+
+#map- found
+plot_usmap(data = found, 
+           values = 'freq_sum', 
+          include=found$state, 
+          color = "blue",
+          labels = TRUE) + 
+ scale_fill_continuous(
+   low = "white", high = "blue", name = "# of dogs",label = scales::comma) + 
+  labs(title = "US States", subtitle = "$found: Number of dogs group by state") 
+
+```
+
+**description**
+
+
+```{r plot by zipcode, message = FALSE, warning=FALSE}
+fm <- dog_descriptions[-c(2:19,21:27,32:38)]
+fm.zip <- geocode_zip(fm$contact_zip)
+names(fm)[5] <- "zipcode"
+names(fm)[5]
+fm<- merge(fm.zip, fm, by='zipcode')
+
+
+
+us <- c(left = -125, bottom = 25.75, right = -67, top = 49)
+get_stamenmap(us, zoom = 5, maptype = "toner-lite") %>% ggmap() 
+
+state <- subset(fm, fm$contact_state == "OH")
+qmplot(lng, lat, data = fm, maptype = "toner-lite", color = I("blue"))
+qmplot(lng, lat, data = state, maptype = "toner-lite", color = I("blue"))
+
+```
+
+We built a word cloud on variable`description` as it's mainly text and wishing to gain more information from the text mining and the most frequent word.
+
+```{r word cloud prep, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Load the data as a corpus
+docs <- Corpus(VectorSource(dog_travel$description))
+#inspect the content of docs
+inspect(docs)
+#text transformation
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+docs <- tm_map(docs, toSpace, "/")
+docs <- tm_map(docs, toSpace, "@")
+docs <- tm_map(docs, toSpace, "\\|")
+docs <- tm_map(docs, toSpace, "~")
+docs <- tm_map(docs, toSpace, "~~")
+```
+
+```{r,echo=TRUE,echo=FALSE,results='hide',message=FALSE, warning=FALSE}
+#text cleaning
+# Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+docs <- tm_map(docs, removeNumbers)
+# Remove english common stopwords
+docs <- tm_map(docs, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <- tm_map(docs, removeWords, c("blabla1", "blabla2")) 
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+```
+
+```{r, echo=TRUE,echo=FALSE,results='hide',message=FALSE, warning=FALSE}
+#build text- document matrix
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 1)
+```
+
+```{r wordcloud,message=FALSE, warning=FALSE}
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+**remove and still_there**
+```{r remove barplot,message=FALSE, warning=FALSE}
+#remove
+remove_found <- dog_travel %>%
+  left_join(state_codes, by = c("found" = "state"))%>%
+  mutate(state=abbrev)%>%
+  na.omit()
+
+#remove
+plota<- ggplot(remove_found,aes(state, fill=factor(remove)))+
+  geom_bar()+
+  scale_y_continuous(name = "Count", labels =scales::comma)+
+  coord_flip()+
+  ggtitle("Remove by states")
+
+#still_there
+plotb<- ggplot(remove_found,aes(state, fill=factor(still_there)))+
+  geom_bar()+
+  scale_y_continuous(name = "Count", labels =scales::comma)+
+  coord_flip()+
+  ggtitle("Still_there by states")
+
+grid.arrange(plota, plotb, ncol=2, nrow =1)
+```
+
+### Dog Descriptions Dataset EDA
+
+We intend to used bar chart/ pie chart on categorical variables eg, `breed`, `color`, `sex`,`color`,`coat`. We also intend to use parallel coordinates on variables `found `and `contact state/city`.
+
+```{r barplots of several variables, echo=FALSE,message=FALSE, warning=FALSE}
+#age and sex
+ggplot(data=dog_descriptions,aes(age, fill=factor(sex)))+
+  geom_bar()+
+  coord_polar()+
+  ggtitle("Sex and age information")
+
+#Color and coat
+plot1<- dog_descriptions%>%
+  na.omit()%>%
+  ggplot(aes(color_primary, fill=factor(coat)))+
+  geom_bar()+
+  theme(axis.text.x=element_text(angle = 90, hjust = 0))+
+  ggtitle("Color and coat information")
+
+#Breed vs. age vs. sex
+plot2<- dog_descriptions%>%
+  na.omit()%>%
+  ggplot(aes(breed_primary, fill=factor(age)))+
+  geom_bar()+
+  theme(axis.text.x=element_text(angle = 90, hjust = 0))+
+  facet_wrap(~sex, scales = "free")+
+  ggtitle("Breed vs. age vs. sex information")
+
+grid.arrange(plot1, plot2, ncol=2, nrow =1)
+
+```
+
+
+On top of that, we intend to gain new information by slicing and grouping by the `state`, we can get more summarized information by `state` and then look into information within each `state`.
+
+For not mixed breed, these are the breed with most counted number within each state:
+```{r group by not mixed breed and state, message=FALSE, warning=FALSE}
+#for not mixed breed most number of breed in each state
+breed<- dog_descriptions%>%
+  filter(breed_mixed=="FALSE")%>%
+  group_by(contact_state,breed_primary)%>%
+  summarise(breed_sum=n())%>%
+  arrange(contact_state, desc(breed_sum))%>%
+  slice(1)
+
+table(breed$breed_primary)
+```
+We can see that as not mixed breed, Pit Bull Terrier as top 1 breed in 25 states.  
+
+For mixed breed, these are the breed_primary with most counted number within each state:
+```{r group by mixed breed and state, message=FALSE, warning=FALSE}
+#for  mixed breed most number of breed in each state
+mixed<-dog_descriptions%>%
+  filter(breed_mixed=="TRUE")%>%
+  group_by(contact_state,breed_primary)%>%
+  summarise(breed_mix_sum=n())%>%
+  arrange(contact_state, desc(breed_mix_sum))%>%
+  slice(1)
+
+table(mixed$breed_primary)
+
+```
+We can see that for Labrador Retriever as breed_primary has the most number: 29 states, followed by Pit Bull Terrier (13 states).
+
+[Back to top of this section](#EDAvisheader)
+
+## Combined Dataset EDA{#Combineedaheader}
+
+We will continue with EDA by exploring and visualizing the variables between each data sets.
+
+### relationship among three dataset:
+
+The original dog_move dataset is derived from cleaned 2,460 rows of Travel dataset. Each row represents a single dog that was available for adoption somewhere in the US. Each of these dogs is described as having been moved from another location to their current location.
+
+```{r dog moves row number, message=FALSE, warning=FALSE}
+sum(dog_moves$exported)
+sum(dog_moves$imported)
+```
+
+```{r dog moves subset, message=FALSE, warning=FALSE}
+moves_sub<- dog_moves%>%select("location","country")
+```
+
+subset of dog_travel in us with distinct id (one row of record).
+```{r dog moves join travel, message=FALSE, warning=FALSE}
+c= moves_sub$location
+
+travel_moves<- dog_travel%>%
+  left_join(moves_sub, by=c("found_new"="location"))%>%
+  distinct(id, .keep_all = TRUE)%>%
+  filter(country== "US")%>%
+  group_by(found_new)%>%
+  summarise(n=n())
+
+travel_contact<- dog_travel%>%
+  left_join(moves_sub, by=c("found_new"="location"))%>%
+  distinct(id, .keep_all = TRUE)%>%
+  filter(country== "US")%>%
+  group_by(contact_state)%>%
+  summarise(n=n())
+
+#exported = travel_moves - travel_contact
+
+# #most_exported <- dog_travel%>%
+#   distinct(id, .keep_all = TRUE)%>%
+#   count(found_new, sort = TRUE)
+# 
+# #most_imported <- dog_travel %>%
+#   distinct(id, .keep_all = TRUE)%>%
+#   count(contact_state, sort = TRUE) 
+
+#subset of dog_travel in us and distinct id
+travel_sub_1<-dog_travel%>%
+  filter(found_new%in%state_fulname)%>%
+  group_by(id)%>%
+  distinct(id, .keep_all = TRUE)%>%
+  arrange(id)
+  
+```
+we can notice that: the sum count of each `found`(excluding the number from their states, i.e `contact_state`=`found`) is approximately the summary number in `dog_moves.dataset`. 
+
+Note: we could not find the source of which 2460 rows of the original travel dataset were selected from the description dataset. Therefore, we computed the sub_total of each location using the `dog_travel.csv` dataset. 
+
+### Combine data: travel left_join description 
+Connect travel and description data, create a new variable called `origin_bi`: a binary variable, assign **1** if the `id` is in travel datasets (meaning these dogs whose `description` indicates that they did not originate in the state where they were made available for adoption ).
+```{r}
+travel_id= travel_sub_1$id
+
+dog_descriptions<- dog_descriptions%>%
+  mutate(origin_bi=ifelse(id%in%travel_id,1,0))
+
+ # combine_sum%>%
+ #   filter(origin_bi==1)%>%
+ #   arrange(desc(n))
+
+combine_sum<- dog_descriptions%>%
+  group_by(contact_state, origin_bi)%>%
+  summarise(n=n())%>%
+  mutate(freq = formattable::percent(n/sum(n)))%>% 
+  arrange(desc(freq))%>%
+  mutate(origin_bi_detail=ifelse(origin_bi==0,"local", "import"))
+
+ggplot(data=combine_sum, aes(x=contact_state,y=freq, fill=factor(origin_bi_detail, levels = c("local","import"))))+
+  geom_bar(position="fill", stat="identity")+
+  scale_y_continuous(name = "Percentage", labels =scales::percent)+
+  coord_flip()+
+  ggtitle("Import dog percentage by states")
+
+```
+
+Washington (WA): 19.27% -- has the highest import percentage of dogs. NY has the highest imported number of dogs: 351 (around 8.76%).
+
+### Combine data: description left_join travel  
+We left joined description with travel and got a new dataset named: `travel_detatil`. Let's explore an example in this dataset: There is a dog called **Dahui**, his id number is "44759409". We can track his origin (China) and exported place (Maine). 
+
+```{r}
+travel_detail%>%
+  filter(id=="44759409")%>%
+  select(id, org_id,url, breed_primary, breed_secondary, age, sex, size,name, contact_city.x,found, found_new, description.x)
+
+```
+![Da hui](https://raw.githubusercontent.com/njuteresa2019/MS-BA-data-wrangling/main/dahui.png)
+
+### Combine data: travel left_join state (state populations) 
+We combined state population data with the descriptions data in order to better understand the number of adoptable dogs with respect to the state population. The state totals were summarized and used to calculate the number of dogs per 100,000 people for each of the states.
+
+```{r prep data for hexmap}
+
+state <- read.csv("https://raw.github.com/rtkoenig/datawrangling_data/master/state_pop.csv")
+state <- tibble(state)
+ 
+state %>% rename_with(tolower) -> state
+# prepare the data for the hex map
+dog_descriptions %>%
+  left_join(state, by = c("contact_state" = "abbrev") ) %>%
+  group_by(contact_state, state) %>%
+  summarise(num_dogs = n(), state_pop = max(pop) )  %>%
+  mutate(dogs_per_100k = num_dogs / (state_pop / 100000)) %>%
+  select(state, contact_state, num_dogs, state_pop, dogs_per_100k) %>%
+  filter(!is.na(dogs_per_100k)) %>%
+  mutate(id = state, group = paste0(state, ".1")) %>%
+  select(id, state, contact_state, num_dogs, state_pop, dogs_per_100k,
+          #lat = latitude, long = longitude,
+          group ) ->   dog_data
+
+```
+
+```{r hexmap-dogs per 100k people, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Download the Hexagon boundaries at geojson format here: https://team.carto.com/u/andrew/tables/andrew.us_states_hexgrid/public/map.
+
+# Load this file. (Note: I stored in a folder called data)
+spdf <- geojson_read("https://raw.github.com/rtkoenig/datawrangling_data/master/us_states_hexgrid.geojson",  what = "sp")
+
+
+# Bit of reformatting
+spdf@data = spdf@data %>%
+  mutate(google_name = gsub(" \\(United States\\)", "", google_name))
+
+spdf_fortified <- tidy(spdf, region = "google_name")
+
+# Calculate the centroid of each hexagon to add the label:
+centers <- cbind.data.frame(data.frame(gCentroid(spdf, byid=TRUE), id=spdf@data$iso3166_2))
+
+# Merge geo-spatial and numerical information
+
+spdf_fortified <- spdf_fortified %>%
+  left_join(. , dog_data, by = c("id"="state"))
+
+# Bin the data
+spdf_fortified$bin <- cut( spdf_fortified$dogs_per_100k , breaks=c(seq(0,30,5), Inf), labels=c("0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30+" ), include.lowest = TRUE )
+
+# Prepare a color scale coming from the viridis color palette
+my_palette <- rev(magma(8))[c(-1,-9)]
+ 
+# plot
+ggplot() +
+  geom_polygon(data = spdf_fortified, aes(fill = bin, x = long, y = lat, group = id) , size=0, alpha=0.9) +
+  geom_text(data=centers, aes(x=x, y=y, label=id), color="white", size=3, alpha=0.6) +
+  theme_void() +
+  scale_fill_manual(
+    values=my_palette,
+    name="Adoptable dogs per 100k",
+    guide = guide_legend( keyheight = unit(3, units = "mm"), keywidth=unit(12, units = "mm"), label.position = "bottom", title.position = 'top', nrow=1)
+  ) +
+  ggtitle( "Adoptable dogs per 100k people" ) +
+  theme(
+    legend.position = c(0.5, 0.9),
+    text = element_text(color = "#22211d"),
+    plot.background = element_rect(fill = "#f5f5f2", color = NA),
+    panel.background = element_rect(fill = "#f5f5f2", color = NA),
+    legend.background = element_rect(fill = "#f5f5f2", color = NA),
+    plot.title = element_text(size= 22, hjust=0.5, color = "#4e4d47", margin = margin(b = -0.1, t = 0.4, l = 2, unit = "cm")),
+  )
+
+
+```
+
+
+[Back to top of this section](#Combineedaheader)
+
+
+## relationships among the three datasets:{#relationshipheader}
+
+From the example of **Dahui**, we can notice that we are empowered of summary and detailed information of adoptable dogs. The datasets is intended to provide as much trustworthy information to pet-finders as possible.
+
+![relationship](https://raw.githubusercontent.com/njuteresa2019/MS-BA-data-wrangling/main/relationship.png)
+
+
+
+
+
+
+[Back to top of this section](#relationshipheader)
+
+# Conclusion
+In conclusion, during the process of data wrangling, We explored three datasets: `dog_move.csv`, `dog_travel.csv`,`dog_description.csv` and found some relationships among said datasets, as well as more detailed information on the adopted dogs. For example, the geographical distribution of adoptable dogs illustrate that a disproportionate amount of stray dogs were eventually found or "rescued" in Texas. However, the greatest *percentage* of dogs actually adopted from shelters was evident in the state of Virginia. 
+
+Further, the zip code visualizations illustrate that there are much greater amounts of zip codes on east coast of the United which have adoptable dogs when compared to the west coast or midwestern states. This may be due to the fact that the east coast is typically densely populated, and so more adoption centers or shelters may be necessary than areas which have smaller, more scattered populations. 
+
+While the word cloud visualization is insightful, no conclusions can be drawn because these are all words could be used in a dog's description without proper context. For example, the word "cats" is included as a word which is frequently used in the dog's text description. However, this word could be used both to describe a dog that is "good with cats" as well as when a dog is "bad with cats". Therefore, this information cannot be used in good faith.
+
+The dog description visualization is interesting because this illustrates that most dogs in shelters are adult females, followed by young females, then adult males, then young males. Baby dogs (puppies) and senior dogs are less common. However, this skew toward more female dog representation in shelters may illustrate that perhaps male dogs are more likely to be adopted; however, perhaps it is just the case that more stray female dogs tend to be found or imported into a certain shelter.
+
+Seeming as though pit bulls tend to be the most abundant breed within at least half of all United States shelters, perhaps pit bulls are less desirable dogs for adoption. This may be due to stigma that pit bulls are aggressive; and therefore people may be less likely to adopt them (especially those who might have children). However, it could also just be the case that pit bulls are bred more often than other breeds of dogs, leading to a higher raw number of pit bulls. Even of dogs that are mixed breed, those with the primary breed being pit bulls are still the most numerous in at least 13 states, usurped only by mixed breed dogs where the primary breed is Labrador Retriever (which are the most numerous primary breed in mixed breed dogs in 29 states).
+
+The data regarding the way that sheltered dogs travel (due to importing or exporting) is also interesting because it illustrates that perhaps more dogs could be adopted domestically if they were exported to more adoption-conducive states. For example, Maine, Vermont, Rhode Island, New Jersey, Connecticut, West Virginia, Virginia, South Carolina, DC, Georgia, Colorado, New Mexico, and Oklahoma seem to have the highest amount of adoptable dogs per capita. Perhaps these adoptable dogs could be exported to states with lower amounts of adoptable dogs per capita to see if their chances of adoption increase. This way, the commodity of canines is more evenly distributed and therefore, more people could adopt a furry friend. It appears as if exporting an already adoptable dog will increase its chances of finding its forever home, as long as it is exported to a place with a greater demand for sheltered animals. 
+
+From what was gathered through this data wrangling, it seems as if the most stray dogs are found and sheltered in Texas, while the best state for sheltered dogs to be in is Virginia. Exporting a sheltered dog from a state with more available adoptable dogs to a state with more room in shelters (but also still considerable populations) might increase said dog's chances at adoption. If a dog is in a shelter, it is likely an adult or young female pit bull in an east coast zip code. However, this is just what our group has interpreted from the data and visualizations listed above, and is not a comprehensive case study of all aspects of what might influence Americans to adopt. However, our group still believes that this information could easily be used by shelters around the United States to optimize dog adoptions. 
+
+# Appendix: Dictionary{.tabset .tabset-fade .tabset-pills}
+
+## dog_moves data
+
+| Variable| Class|description                      |
+|---------| -----| --------------------------------|
+|`location`	|character|	The full name of the US state or country|
+|`exported`	|double|The number of adoptable dogs available in the US that originated in this location but were available for adoption in another location|
+|`imported`	|double|The number of adoptable dogs available in this state that originated in a different location|
+|`total`|	double|The total number of adoptable dogs availabe in a given state.|
+|`inUS`	|logical|Whether or not a location is in the US or not. Here, US territories will return FALSE|
+
+ <a href="#top">Back to top</a>
+
+## dog_travel data
+
+| Variable| Class|description                      |
+|---------| -----| --------------------------------|
+|`id`|	double|	The unique PetFinder identification number for each animal|
+|`contact_city`|	character|	The rescue/shelter's listed city|
+|`contact_state`|	character|	The rescue/shelter's listed State|
+|`description`|	character|	The full description of each animal as entered by the rescue/shelter|
+|`found`|	character|	Where the animal was found.|
+|`manual`|	character|	.|
+|`remove`|	logical|	Animal removed from location|
+|`still_there`|	logical	TRUE/FALSE| - Whether the animal is still located in their origin location and will be transported to their final destination after adoption.|
+
+ <a href="#top">Back to top</a>
+
+## dog_descriptions data
+
+| Variable| Class|description                      |
+|---------| -----| --------------------------------|
+|`id`|	double|	The unique PetFinder identification number for each animal.|
+|`org_id`|	character|	The unique identification number for each shelter or rescue.|
+|`url`|	character|	The URL for each animal's listing.|
+|`species`|	character|	Species of animal.|
+|`breed_primary`|	character|	The primary (assumed) breed assigned by the shelter or rescue.|
+|`breed_secondary`|	character|	The secondary (assumed) breed assigned by the shelter or rescue.|
+|`breed_mixed`|	logical|	Whether or not an animal is presumed to be mixed breed.|
+|`breed_unknown`|	logical|	Whether or not the animal's breed is completely unknown.|
+|`color_primary`|	character|	The most prevalent color of an animal.|
+|`color_secondary`|	character|	The second most prevalent color of an animal.|
+|`color_tertiary`|	character|	The third most prevalent color of an animal.|
+|`age`|	character|	The assumed age class of an animal (Baby, Young, Adult, or Senior).|
+|`sex`|	character|	The sex of an animal (Female, Male, or Unknown).|
+|`size`|	character|	The general size class of an animal (Small, Medium, Large, Extra Large).|
+|`coat`|	character|	Coat Length for each animal (Curly, Hairless, Long, Medium, Short, Wire).|
+|`fixed`|	logical|	Whether or not an animal has been spayed/neutered.|
+|`house_trained`|	logical|	Whether or not an animal is trained to not go to the bathroom in the house.|
+|`declawed`|	logical|	Whether or not the animal has had its dewclaws removed.|
+|`special_needs`|	logical|	Whether or not the animal is considered to have special needs (this can be a long-term medical condition or particular temperament that requires extra care).|
+|`shots_current`|	logical|	Whether or not the animal is up to date on all of their vaccines and other shots.|
+|`env_children`|	logical|	Whether or not the animal is recommended for a home with children.|
+|`env_dogs`|	logical|	Whether or not the animal is recommended for a home with other dogs.|
+|`env_cats`|	logical|	Whether or not the animal is recommended for a home with cats.|
+|`name`|	character|	The animal’s name (as given by the shelter/rescue).|
+|`tags`|	character|	Any tags given to the dog by the shelter rescue (pipe | separated).|
+|`photo`|	character|	The URL to the animal’s primary photo.|
+|`status`|	character|	Whether the animal is adoptable or not.|
+|`posted`|	character|	The date that this animal was first listed on PetFinder .|
+|`contact_city`|	character|	The rescue/shelter’s listed city.|
+|`contact_state`|	character|The rescue/shelter’s listed state.|
+|`contact_zip`|	character|	The rescue/shelter’s listed zip code.|
+|`contact_country`|	character|	The rescue/shelter’s listed country.|
+|`stateQ`|	character|	The state abbreviation queried in the API to return this result .|
+|`accessed`	|double|	The date that this data was acquired from the PetFinder API.|
+|`type`|	character|	The type of animal.|
+|`description`|	character	|The full description of an animal, as entered by the rescue or shelter. This is the only field returned by the V1 API.|
+
+ <a href="#top">Back to top</a>

@@ -1,0 +1,272 @@
+---
+title: "Linear Regression with R"
+author: "John Trygier"
+date: "11/14/2021"
+output:
+  html_document: default
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+# Alumni Donations Analysis
+
+Alumni donations are an important source of revenue for colleges and universities. If administrators could determine the factors that influence increases in the percentage of alumni who make a donation, they might be able to implement policies that could lead to increased revenues. Research shows that students who are more satisfied with their contact with teachers are more likely to graduate. As a result, one might suspect that smaller class sizes and lower student-faculty ratios might lead to a higher percentage of satisfied graduates, which in turn might lead to increases in the percentage of alumni who make a donation. The attached data alumni.xls shows data for 48 national universities (America’s Best Colleges, Year 2000 Edition). The column labeled % of Classes Under 20 shows the percentage of classes offered with fewer than 20 students. The column labeled Student/Faculty Ratio is the number of students enrolled divided by the total number of faculty. Finally, the column labeled Alumni Giving Rate is the percentage of alumni that made a donation to the university.
+
+Use R to analyze the given data and answer the following questions. Consider the alumni giving rate as the response variable Y and the percentage of classes with fewer than 20 students as the predictor variable X.
+
+# Content
+
+
+## EDA - Understanding the Data
+
+
+
+
+```{r packages, echo=FALSE, warning=FALSE, results='hide', message=FALSE}
+
+# Load required packages
+options("repos" = c(CRAN = "http://cran.us.r-project.org"))
+install.packages("vip" )
+
+
+## ----prerequisites, eval=FALSE-------------------------------------------
+## # List of required (CRAN) packages
+ pkgs <- c(
+   "broom",      # for augment() function  #<<
+   "car",        # for vif() function  #<<
+   "GGally",     # for ggpairs() function
+   "ggplot2",    # for awesome graphics
+   "ggrepel",    # for geom_text_repel() function
+   "gridExtra",  # for grid.arrange() function
+   "pdp",        # for Boston housing data
+   "plotly",     # for interactive plots
+   "tibble",      # for nicer data frames
+   "earth",
+   "caret",
+   "svglite"
+ )
+
+  for (pkg in pkgs) {
+    if (!(pkg %in% installed.packages()[, "Package"])) {
+      install.packages(pkg)
+    }
+  }
+
+
+library(dplyr)
+library(magrittr)
+library(knitr)
+library(ggplot2)
+library(earth)
+library(caret)
+library(vip)
+
+knitr::opts_chunk$set(
+  cache = TRUE,
+  echo = TRUE,
+  dev = "svglite",
+  fig.align = "center",
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE
+)
+
+```
+
+```{r data, echo=FALSE}
+url <- "https://bgreenwell.github.io/uc-bana7052/data/alumni.csv"
+alumni <- read.csv(url)
+DT::datatable(alumni)  # requires DT package
+```
+
+```{r summary, echo=FALSE}
+summary(alumni)
+```
+
+For our alumni giving dataset we have 5 variables, our school, the percentage of classes with a class size under 20, the student-faculty ratio, the alumni giving rate, and a binary variable for whether or not the school is private. We can examine the distribution of our variables using boxplots and histograms. We have no missing values present in the dataset. 
+
+```{r dist_plots, fig.show="hold", out.width="50%", echo=FALSE}
+
+par(mfrow=c(3, 2))
+boxplot(alumni$percent_of_classes_under_20, main = "Distribution of % of Classes Under 20")
+hist(alumni$percent_of_classes_under_20, main = "Distribution of % of Classes Under 20", xlab = "% Classes Under 20", ylab = "Frequency")
+
+boxplot(alumni$student_faculty_ratio, main = "Distribution of Student Faculty Ratio")
+hist(alumni$student_faculty_ratio, main = "Distribution of Student Faculty Ratio", xlab = "Student/Faculty Ratio", ylab = "Frequency")
+
+
+boxplot(alumni$alumni_giving_rate, main = "Distribution of Alumni Giving Rate")
+hist(alumni$alumni_giving_rate, main = "Distribution of Alumni Giving Rate", xlab = "Alumni Giving Rate", ylab = "Frequency")
+
+```
+
+There doesn’t appear to be a clear distribution across any of the numeric variables, we can see the possibility of a bimodal distribution in our % of Class Sizes, it will be worth investigating whether there are substantial differences due to one of our variables, likely, the binary “private” school variable. 
+
+```{r giving rate, warning=FALSE, echo=FALSE}
+alumni %>% 
+  mutate(rank_giving = rank(desc(alumni_giving_rate))) %>% 
+  select(rank_giving, alumni_giving_rate, ï..school, private) %>% 
+  arrange(rank_giving) %>% 
+  filter(., rank_giving < 10)
+
+alumni %>% 
+  mutate(rank_giving = rank(alumni_giving_rate)) %>% 
+  select(rank_giving, alumni_giving_rate, ï..school, private) %>% 
+  arrange(rank_giving) %>% 
+  filter(., rank_giving < 10)
+
+
+
+```
+The top 10 schools for giving are all private, and only 1 of the bottom 10 schools for giving is private, which indicates that there is likely some difference between private and public schools for alumni giving rates. 
+
+```{r separators, warning=FALSE, echo=FALSE}
+
+par(mfrow = c(2, 1))
+ggplot(alumni, aes(x = student_faculty_ratio, y = alumni_giving_rate, group = private)) +
+  geom_point(aes(colour = private), size = 3) +
+  # geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+  #             color = "black") +
+  theme_light()
+
+ggplot(alumni, aes(x = percent_of_classes_under_20, y = alumni_giving_rate, group = private)) +
+  geom_point(aes(colour = private), size = 3) +
+  # geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+  #             color = "black") +
+  theme_light()
+```
+
+There is a clear distinction between private and public schools, both in the student/faculty ratio as well as in the % of Classes with fewer than 20 students. This appears to have a positive linear relationship, but not one with a different intercept than a simple linear model, therefore we should not develop multiple linear models on the public/private distinction, though it will be helpful in building our predictive model. 
+
+```{r}
+library(plotly)  # for interactive plotting
+
+fig <- plot_ly(alumni, x = ~student_faculty_ratio, y = ~percent_of_classes_under_20, z = ~alumni_giving_rate, color = ~private, colors = c('#BF382A', '#0C4B8E'))
+fig <- fig %>% add_markers()
+fig <- fig %>% layout(scene = list(xaxis = list(title = 'Weight'),
+                     yaxis = list(title = 'Gross horsepower'),
+                     zaxis = list(title = '1/4 mile time')))
+
+fig
+```
+
+When viewed in 3-d, there is a clear linear trend across our continuous variables, feel free to zoom in and out, as well as shift the axes of the plot to view it from multiple angles. 
+
+```{r pairs, echo=FALSE}
+numeric <- dplyr::select_if(alumni, is.numeric)
+GGally::ggpairs(numeric)
+
+```
+
+We can see a negative linear relationship between student/faculty ratio and the % of class sizes under 20, which makes intuitive sense, as the greater the student/faculty ratio, the greater the number of classes with more than 20 students. Our binary variable displays separation at the extreme for each of our continuous variables, with varying degrees of overlap. 
+
+We can see some strong positive and negative linear relationships between our numeric variables, however, it doesn’t appear that there is any need for concern regarding multicollinearity, as there are no variables with a correlation with an absolute value greater than 0.9.
+
+## B. Analyze the data set using linear regression models. Carry out model diagnostic analysis. If there are any violations of the model assumptions, propose and carry out possible remedies. Select the “best” model for the data set.
+
+The minimum requirement for the data analysis includes: exploratory data analysis of your data set (summaries, plots, etc.), linear regression models and model diagnostic analysis, and appropriate remedies (e.g., transformations, if necessary). You will use the alumni giving rate as the response variable ( Y ) of interest. The potential predictors should include the percentage of classes with fewer than 20 students ( X1 ), student/faculty ratio ( X2 ), and the indicator variable private ( X3 ) (i.e., a 1 indicates a private school).
+```{r lm, echo=FALSE}
+model <- lm(alumni_giving_rate ~ ., data = numeric)
+summary(model)
+```
+
+Our simple linear regression model has an Adjusted R-squared of 0.5457, which leaves room for improvement. Our most significant variable, according to this model, is the student/faculty ratio, meaning that this variable plays an important role in determining the alumni giving rate.
+
+
+
+```{r residuals, echo=FALSE}
+par(mfrow=c(2, 2))
+rorig <- residuals(model)  # ordinary
+rstan <- rstandard(model)  # studentized
+rstud <- rstudent(model)  # studentized deleted
+press <- rstandard(model, type = "predict")  # PRESS
+fitted.res <- resid(model)
+hist(rorig)
+plot(fitted(model), fitted.res, 
+     ylab="Residuals", xlab="Fitted Values", 
+     main="Fitted Value Residuals") 
+
+qqnorm(alumni$alumni_giving_rate, main = "Fitted Values QQ Plot")
+qqline(alumni$alumni_giving_rate, lty = "dotted", col = "red2")
+```
+
+Our fitted value residuals appear uniformly distributed about 0 based on our residuals plot, with perhaps only clustering on the upper end of the x-axis giving cause for concern. Our qq plot indicates that we don’t see major deviations in our residuals that should cause us to rethink the model.  The most important variables yielded by this model are the % classes under 20, the student/faculty ratio, and the public private distinction.
+
+
+
+```{r vif, echo=FALSE}
+library(car)
+vif(model)
+GGally::ggpairs(numeric)
+```
+Considering the effect of variables on the alumni giving rate, we can see that as student/faculty ratio decreases, the alumni giving rate increases, supporting the conclusions of our linear model. We can also see a general, if noisy, increase in the alumni giving rate as the % of Classes with less than 20 students increases. 
+
+## Optimization 
+
+An excellent case study needs to work on selecting the “best” model for the data and/or carrying out appropriate remedies to improve the statistical inferences (e.g., you can try Box-Cox transformation if necessary).
+
+```{r mars_model, echo=FALSE}
+alumni_mars <- earth(alumni_giving_rate ~ .,
+      data = alumni,
+      degree = 1)
+
+summary(alumni_mars)
+plot(alumni_mars)
+
+vip(
+  alumni_mars,
+  num_features= 7
+)
+```
+
+```{r create_binaries}
+alumni$notre_dame <- ifelse(alumni$ï..school == "U. of Notre Dame", 1, 0)
+alumni$princeton <- ifelse(alumni$ï..school == "Princeton University", 1, 0)
+alumni$dartmouth <- ifelse(alumni$ï..school == "Dartmouth College", 1, 0)
+alumni$lehigh <- ifelse(alumni$ï..school == "Lehigh University", 1, 0)
+```
+
+Using the earth() model in MARS, I deployed machine learning to search for an optimal linear model, the result was a linear regression model that identified better predictors to bring into the model, as well as any necessary data transformation. What the model was able to do was identify the addition of certain variables and transformations that improved the accuracy of the model, namely, adding a binary variable for certain high-donation schools. To tune this model, I created variables for those schools indicated in the model, then ran a 10-fold cross validation algorithm varying the degree of the variables, yielding this solution.
+
+```{r tune_model, echo=FALSE}
+# Load required packages
+# Tune a MARS model
+set.seed(101)  # for reprocubility
+alumni_mars_tune <- train(
+  x = subset(alumni, select = -c(alumni_giving_rate, ï..school)),
+  y = alumni$alumni_giving_rate,
+  method = "earth",
+  metric = "Rsquared",
+  trControl = trainControl(method = "repeatedcv", 
+                           number = 10, repeats = 3),
+  tuneGrid = expand.grid(degree = 1:5, nprune = 5)
+)
+print(alumni_mars_tune)
+```
+
+```{r summarize_tuned, echo = FALSE}
+ggplot(alumni_mars_tune) + theme_light()
+
+```
+
+We can see that as the degree was changed for our model, we optimized our findings at level 2, indicating that we needed no additional power transformations to improve our model based on a maximization of the R-Squared.
+
+```{r show_variables, echo=FALSE}
+vip(
+  alumni_mars_tune, 
+  num_features = 7
+)
+```
+The importance of our variables as calculated by our MARS model are shown to the right, with student/faculty ratio being the most important variable in the model, followed by our identifier variables for Notre Dame, Dartmouth, and Princeton. 
+
+```{r summarize_model}
+summary(alumni_mars_tune$finalModel)
+
+```
+
+The final model generated from this analysis has an R-Squared value of 0.756, which is a major improvement over our simple linear model R-Squared value of 0.54. What we can surmise from this analysis is that a major amount of influence on alumni giving comes from being an alumnus of specific schools, which are uniformly private – Notre Dame, Dartmouth, and Princeton. These universities have a strong alumni donation base that places them above their competition, while many of our other universities see clear increases in donation based on reducing class sizes and emphasizing a small student/faculty ratio. What causes this extraordinary level of giving at these schools is unclear based on this analysis, though it would be an interesting topic to investigate for the future.
+
+A university could use this analysis to inform their hiring practices to increase alumni donations, for example, if a university wanted to decrease their student/faculty ratio to achieve a certain level of alumni donations, they could use this model as a baseline for understanding what level of hiring they would need to commit to in order to achieve a certain level of donations. This may ultimately not favor a university’s recruitment strategy, as many public universities, such as the University of Cincinnati, compete based on experiential-learning & Co-Op opportunities, particularly in stem, and the effect of a decreased student/faculty ratio may not have the desired effect for schools that have a different consumer base, however, this analysis allows all stakeholders to approach the problem from an informed perspective. 
